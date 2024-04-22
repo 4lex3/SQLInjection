@@ -9,6 +9,7 @@ Created on February 2023
 import mysql.connector
 from flask import Flask,render_template,request;
 
+
 # Funciones de backend #############################################################################
 
 # connectBD: conecta a la base de datos users en MySQL
@@ -16,7 +17,6 @@ def connectBD():
     db = mysql.connector.connect(
         host = "localhost",
         user = "root",
-        passwd = "claumestra",
         database = "users"
     )
     return db
@@ -56,10 +56,15 @@ def checkUser(user,password):
     bd=connectBD()
     cursor=bd.cursor()
 
-    query=f"SELECT user,name,surname1,surname2,age,genre FROM users WHERE user='{user}'\
-            AND password='{password}'"
-    print(query)
-    cursor.execute(query)
+    """
+    ?Para evitar las inyecciones de codigo podemos parametrizar los comandos, es decir,
+    ?debemos evitar es concatenar directamente en la consulta a realizar, ya que da salida a inyecciones de codigo.
+    """
+
+    query = "SELECT user, name, surname1, surname2, age, genre FROM users WHERE user = %s AND password = %s"
+
+    #print(query)
+    cursor.execute(query, (user, password))
     userData = cursor.fetchall()
     bd.close()
     
@@ -70,8 +75,28 @@ def checkUser(user,password):
 
 # cresteUser: crea un nuevo usuario en la BD
 def createUser(user,password,name,surname1,surname2,age,genre):
-    
-    return
+ 
+    query = """
+            INSERT INTO users(user, password, name, surname1, surname2, age, genre) 
+            VALUES (%s,%s,%s,%s,%s,%s,%s); 
+                """
+
+    bd = connectBD()
+    cursor = bd.cursor()
+
+    try:
+        cursor.execute(query, (user, password, name, surname1, surname2, age, genre))
+        bd.commit(); 
+
+        return True;
+    except Exception as e:
+        bd.rollback();
+        return False
+
+    finally:
+        bd.close()
+
+
 
 # Secuencia principal: configuración de la aplicación web ##########################################
 # Instanciación de la aplicación web Flask
@@ -87,16 +112,44 @@ def login():
     initBD()
     return render_template("login.html")
 
-@app.route("/signin")
-def signin():
-    return "SIGN IN PAGE"
+
+
+@app.route("/register", methods=('GET', 'POST'))
+def register():
+
+
+    if request.method == 'POST':
+
+        formData = request.form;
+
+        user = formData.get('usuario')  
+        password = formData.get('contrasena')
+        name = formData.get('name')
+        surname1 = formData.get('surname1')
+        surname2 = formData.get('surname2')
+        age = formData.get('age')
+        genre = formData.get('genre')
+
+        print(formData)
+
+        statusUser = createUser(user, password, name, surname1, surname2, age, genre)
+
+
+        if (not(statusUser == True)):
+            return "Usuario no creado"
+    
+    return render_template("register.html")
+
+
 
 @app.route("/results",methods=('GET', 'POST'))
 def results():
     if request.method == ('POST'):
         formData = request.form
+
         user=formData['usuario']
         password=formData['contrasena']
+
         userData = checkUser(user,password)
 
         if userData == False:
